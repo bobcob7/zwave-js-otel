@@ -1,0 +1,8 @@
+{
+  "endpoint": "https://otlp-gateway-prod-us-east-0.grafana.net/otlp",
+  "serviceName": "zwave-js-ui",
+  "headers": {
+    "Authorization": "Basic <base64(instanceId:apiToken)>"
+  },
+  "metricExportIntervalMs": 60000
+}
