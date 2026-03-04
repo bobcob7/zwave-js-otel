@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export interface OtelConfig {
   readonly endpoint?: string;
@@ -10,16 +11,20 @@ export interface OtelConfig {
 
 const CONFIG_FILENAME = "otel.json";
 
-function resolveStoreDir(): string {
-  return process.env["STORE_DIR"] ?? join(process.cwd(), "store");
+function tryReadJson(path: string): OtelConfig | undefined {
+  try {
+    return JSON.parse(readFileSync(path, "utf-8")) as OtelConfig;
+  } catch {
+    return undefined;
+  }
 }
 
 export function loadConfig(): OtelConfig {
-  const configPath = join(resolveStoreDir(), CONFIG_FILENAME);
-  try {
-    const raw = readFileSync(configPath, "utf-8");
-    return JSON.parse(raw) as OtelConfig;
-  } catch {
-    return {};
-  }
+  const pluginDir = dirname(fileURLToPath(import.meta.url));
+  const storeDir = process.env["STORE_DIR"] ?? join(process.cwd(), "store");
+  return (
+    tryReadJson(join(pluginDir, CONFIG_FILENAME)) ??
+    tryReadJson(join(storeDir, CONFIG_FILENAME)) ??
+    {}
+  );
 }

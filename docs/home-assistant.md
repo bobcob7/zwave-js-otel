@@ -5,34 +5,38 @@ This guide covers installing the plugin on a Home Assistant instance running the
 ## Prerequisites
 
 - Home Assistant with the Z-Wave JS UI add-on installed
-- [Advanced SSH & Web Terminal](https://github.com/hassio-addons/addon-ssh) add-on (with "Protection mode" disabled)
+- A way to copy files to your HA instance ([Samba](https://github.com/home-assistant/addons/tree/master/samba), [SSH](https://github.com/hassio-addons/addon-ssh), or [File Editor](https://github.com/home-assistant/addons/tree/master/configurator))
 - A Grafana Cloud account (or any OTLP-compatible collector)
 
 ## Step 1: Install the plugin
 
-The plugin ships as a single pre-bundled file (`bundle.mjs`) — no npm or node_modules needed on the target machine.
+The plugin ships as a single pre-bundled file (`bundle.mjs`, ~1.4 MB) — no npm or node_modules needed.
 
-Download the bundle from the [latest release](https://github.com/bobcob7/zwave-js-otel/releases) and copy it to the add-on's persistent store directory.
+The Z-Wave JS UI add-on mounts the HA `/share` directory at `/share` inside the container. This is the easiest place to put the plugin since it's accessible from any add-on and from Samba.
 
-From the Advanced SSH & Web Terminal:
+**Option A: Via Samba**
+
+1. Open the `share` folder on your network (`\\homeassistant\share`)
+2. Create a `zwave-js-otel` folder
+3. Download `bundle.mjs` from the [latest release](https://github.com/bobcob7/zwave-js-otel/releases) and copy it in
+
+**Option B: Via SSH**
 
 ```bash
-# Create the plugin directory
-docker exec $(docker ps -qf "name=zwave") mkdir -p /data/store/plugins/zwave-js-otel
-
-# Download the bundle into the container
+mkdir -p /share/zwave-js-otel
 curl -fsSL https://github.com/bobcob7/zwave-js-otel/releases/latest/download/bundle.mjs \
-  | docker exec -i $(docker ps -qf "name=zwave") sh -c 'cat > /data/store/plugins/zwave-js-otel/bundle.mjs'
+  -o /share/zwave-js-otel/bundle.mjs
 ```
-
-That's it — one 1.4 MB file, no dependencies to install. The file persists across add-on restarts and updates.
 
 ## Step 2: Configure the OTLP exporter
 
-Create the config file at `/data/store/otel.json`:
+Create `otel.json` in the same folder as the bundle:
 
+**Via Samba:** Create the file at `\\homeassistant\share\zwave-js-otel\otel.json`
+
+**Via SSH:**
 ```bash
-docker exec -i $(docker ps -qf "name=zwave") sh -c 'cat > /data/store/otel.json' << 'EOF'
+cat > /share/zwave-js-otel/otel.json << 'EOF'
 {
   "endpoint": "https://otlp-gateway-prod-us-east-0.grafana.net/otlp",
   "headers": {
@@ -42,6 +46,8 @@ docker exec -i $(docker ps -qf "name=zwave") sh -c 'cat > /data/store/otel.json'
 }
 EOF
 ```
+
+The plugin looks for `otel.json` next to the bundle file first, then falls back to the zwave-js-ui store directory (`/data/store/otel.json`).
 
 ### Getting your Grafana Cloud credentials
 
@@ -73,7 +79,7 @@ Replace `YOUR_BASE64_CREDENTIALS` in `otel.json` with the output.
 2. Go to **Settings** > **General**
 3. In the **Plugins** field, add:
    ```
-   /data/store/plugins/zwave-js-otel/bundle.mjs
+   /share/zwave-js-otel/bundle.mjs
    ```
 4. Click **Save** and restart the add-on
 
@@ -95,28 +101,27 @@ In Grafana Cloud, you should see:
 
 ### Plugin not loading
 
-Check the file exists:
+Verify the file exists from SSH:
 
 ```bash
-docker exec $(docker ps -qf "name=zwave") ls -la /data/store/plugins/zwave-js-otel/bundle.mjs
+ls -la /share/zwave-js-otel/bundle.mjs
 ```
 
 ### No data in Grafana Cloud
 
 1. Verify `otel.json` is valid JSON:
    ```bash
-   docker exec $(docker ps -qf "name=zwave") cat /data/store/otel.json
+   cat /share/zwave-js-otel/otel.json | python3 -m json.tool
    ```
 2. Check that your API token has the correct roles (MetricsPublisher, TracesPublisher, LogsPublisher)
 3. Check the endpoint region matches your Grafana Cloud stack
 
 ## Updating the plugin
 
-Download the new bundle and restart:
+Replace `bundle.mjs` with the new version and restart the add-on:
 
+**Via SSH:**
 ```bash
 curl -fsSL https://github.com/bobcob7/zwave-js-otel/releases/latest/download/bundle.mjs \
-  | docker exec -i $(docker ps -qf "name=zwave") sh -c 'cat > /data/store/plugins/zwave-js-otel/bundle.mjs'
+  -o /share/zwave-js-otel/bundle.mjs
 ```
-
-Restart the add-on after updating.
