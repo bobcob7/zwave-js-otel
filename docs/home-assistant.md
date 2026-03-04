@@ -10,35 +10,29 @@ This guide covers installing the plugin on a Home Assistant instance running the
 
 ## Step 1: Install the plugin
 
-Open the Advanced SSH & Web Terminal and run:
+The plugin ships as a single pre-bundled file (`bundle.mjs`) — no npm or node_modules needed on the target machine.
+
+Download the bundle from the [latest release](https://github.com/bobcob7/zwave-js-otel/releases) and copy it to the add-on's persistent store directory.
+
+From the Advanced SSH & Web Terminal:
 
 ```bash
-# Get a shell inside the Z-Wave JS UI container
-docker exec -it $(docker ps -qf "name=zwave") sh
+# Create the plugin directory
+docker exec $(docker ps -qf "name=zwave") mkdir -p /data/store/plugins/zwave-js-otel
 
-# Install npm (removed from the add-on image by default)
-apk add --no-cache npm
-
-# Install the plugin into the persistent store directory
-cd /data/store
-mkdir -p plugins
-cd plugins
-npm init -y
-npm install zwave-js-otel
+# Download the bundle into the container
+curl -fsSL https://github.com/bobcob7/zwave-js-otel/releases/latest/download/bundle.mjs \
+  | docker exec -i $(docker ps -qf "name=zwave") sh -c 'cat > /data/store/plugins/zwave-js-otel/bundle.mjs'
 ```
 
-> **Note:** The `apk add npm` step is needed because the HA add-on strips npm
-> from the image. This is temporary — npm will be gone again on the next
-> add-on update, but the installed plugin in `/data/store/plugins` persists.
-> Re-run `apk add npm && npm install` after add-on updates if the plugin
-> stops loading.
+That's it — one 1.4 MB file, no dependencies to install. The file persists across add-on restarts and updates.
 
 ## Step 2: Configure the OTLP exporter
 
-Create the config file at `/data/store/otel.json`. From the same shell:
+Create the config file at `/data/store/otel.json`:
 
 ```bash
-cat > /data/store/otel.json << 'EOF'
+docker exec -i $(docker ps -qf "name=zwave") sh -c 'cat > /data/store/otel.json' << 'EOF'
 {
   "endpoint": "https://otlp-gateway-prod-us-east-0.grafana.net/otlp",
   "headers": {
@@ -79,7 +73,7 @@ Replace `YOUR_BASE64_CREDENTIALS` in `otel.json` with the output.
 2. Go to **Settings** > **General**
 3. In the **Plugins** field, add:
    ```
-   /data/store/plugins/node_modules/zwave-js-otel
+   /data/store/plugins/zwave-js-otel/bundle.mjs
    ```
 4. Click **Save** and restart the add-on
 
@@ -101,37 +95,28 @@ In Grafana Cloud, you should see:
 
 ### Plugin not loading
 
-Check the plugin path is correct. From SSH:
+Check the file exists:
 
 ```bash
-docker exec -it $(docker ps -qf "name=zwave") ls /data/store/plugins/node_modules/zwave-js-otel/dist/
+docker exec $(docker ps -qf "name=zwave") ls -la /data/store/plugins/zwave-js-otel/bundle.mjs
 ```
-
-You should see `index.js` and other `.js` files.
 
 ### No data in Grafana Cloud
 
 1. Verify `otel.json` is valid JSON:
    ```bash
-   docker exec -it $(docker ps -qf "name=zwave") cat /data/store/otel.json
+   docker exec $(docker ps -qf "name=zwave") cat /data/store/otel.json
    ```
 2. Check that your API token has the correct roles (MetricsPublisher, TracesPublisher, LogsPublisher)
 3. Check the endpoint region matches your Grafana Cloud stack
 
-### Plugin disappears after add-on update
-
-The plugin files in `/data/store/plugins` persist, but npm is removed on update. If the plugin fails to load after an update, get a shell and reinstall:
-
-```bash
-docker exec -it $(docker ps -qf "name=zwave") sh -c "apk add --no-cache npm && cd /data/store/plugins && npm install"
-```
-
-Then restart the add-on.
-
 ## Updating the plugin
 
+Download the new bundle and restart:
+
 ```bash
-docker exec -it $(docker ps -qf "name=zwave") sh -c "apk add --no-cache npm && cd /data/store/plugins && npm update zwave-js-otel"
+curl -fsSL https://github.com/bobcob7/zwave-js-otel/releases/latest/download/bundle.mjs \
+  | docker exec -i $(docker ps -qf "name=zwave") sh -c 'cat > /data/store/plugins/zwave-js-otel/bundle.mjs'
 ```
 
 Restart the add-on after updating.
